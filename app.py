@@ -1,47 +1,45 @@
-from fastapi import FastAPI, UploadFile, Form
-from fastapi.responses import FileResponse
-import numpy as np
-from scipy.io.wavfile import write
-from moviepy.editor import VideoFileClip, AudioFileClip
+from fastapi import FastAPI
+from pydantic import BaseModel
+import subprocess
 import uuid
 import os
+import requests
 
 app = FastAPI()
 
+class VideoRequest(BaseModel):
+    video_url: str
+    audio_url: str
+
 @app.post("/process")
-async def process(video: UploadFile, prompt: str = Form(...)):
+def process_video(data: VideoRequest):
 
-    # === 1. Зберігаємо відео ===
-    video_filename = f"input_{uuid.uuid4()}.mp4"
-    with open(video_filename, "wb") as f:
-        f.write(await video.read())
-
-    # === 2. Генеруємо динамічний звук ===
-    duration = 10  # секунд
-    sample_rate = 44100
-
-    t = np.linspace(0, duration, sample_rate * duration)
-
-    # створюємо дивний "космічний" звук
-    base_freq = np.random.uniform(50, 200)
-    mod_freq = np.random.uniform(0.1, 1.0)
-
-    signal = 0.5 * np.sin(2 * np.pi * base_freq * t + 5*np.sin(2*np.pi*mod_freq*t))
-
+    video_filename = f"video_{uuid.uuid4()}.mp4"
     audio_filename = f"audio_{uuid.uuid4()}.wav"
-    write(audio_filename, sample_rate, signal.astype(np.float32))
-
-    # === 3. Накладаємо звук на відео ===
-    video_clip = VideoFileClip(video_filename)
-    audio_clip = AudioFileClip(audio_filename)
-
-    final_video = video_clip.set_audio(audio_clip)
-
     output_filename = f"output_{uuid.uuid4()}.mp4"
-    final_video.write_videofile(output_filename, codec="libx264", audio_codec="aac")
 
-    # очищення тимчасових файлів
-    os.remove(video_filename)
-    os.remove(audio_filename)
+    # Download video
+    video_response = requests.get(data.video_url)
+    with open(video_filename, "wb") as f:
+        f.write(video_response.content)
 
-    return FileResponse(output_filename, media_type="video/mp4")
+    # Download audio
+    audio_response = requests.get(data.audio_url)
+    with open(audio_filename, "wb") as f:
+        f.write(audio_response.content)
+
+    # Merge using ffmpeg
+    cmd = [
+        "ffmpeg",
+        "-y",
+        "-i", video_filename,
+        "-i", audio_filename,
+        "-shortest",
+        "-c:v", "copy",
+        "-c:a", "aac",
+        output_filename
+    ]
+
+    subprocess.run(cmd)
+
+    return {"output_file": output_filename}
