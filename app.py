@@ -1,4 +1,5 @@
 from fastapi import FastAPI, HTTPException
+from fastapi.responses import FileResponse
 from pydantic import BaseModel
 import subprocess
 import uuid
@@ -18,7 +19,7 @@ def health_check():
 @app.post("/process")
 def process_video(data: VideoRequest):
     video_filename = f"/tmp/video_{uuid.uuid4()}.mp4"
-    audio_filename = f"/tmp/audio_{uuid.uuid4()}.wav"
+    audio_filename = f"/tmp/audio_{uuid.uuid4()}.mp3"
     output_filename = f"/tmp/output_{uuid.uuid4()}.mp4"
 
     try:
@@ -49,13 +50,16 @@ def process_video(data: VideoRequest):
         if result.returncode != 0:
             raise HTTPException(status_code=500, detail=f"FFmpeg error: {result.stderr}")
 
-        return {"output_file": output_filename}
+        return FileResponse(
+            output_filename,
+            media_type="video/mp4",
+            filename="output.mp4"
+        )
 
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
     finally:
-        # Cleanup input files
         for f in [video_filename, audio_filename]:
             if os.path.exists(f):
                 os.remove(f)
