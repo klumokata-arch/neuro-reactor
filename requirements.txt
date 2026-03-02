@@ -1,7 +1,4 @@
 fastapi
 uvicorn
-numpy
-scipy
-moviepy
-python-multipart
 requests
+python-multipart
