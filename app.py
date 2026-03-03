@@ -50,16 +50,21 @@ def process_video(data: VideoRequest):
         if result.returncode != 0:
             raise HTTPException(status_code=500, detail=f"FFmpeg error: {result.stderr}")
 
-        return FileResponse(
-            output_filename,
-            media_type="video/mp4",
-            filename="output.mp4"
-        )
-
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
-    finally:
+        # Cleanup input files only (not output!)
         for f in [video_filename, audio_filename]:
             if os.path.exists(f):
                 os.remove(f)
+
+        return FileResponse(
+            output_filename,
+            media_type="video/mp4",
+            filename="output.mp4",
+            background=None
+        )
+
+    except Exception as e:
+        # Cleanup all files on error
+        for f in [video_filename, audio_filename, output_filename]:
+            if os.path.exists(f):
+                os.remove(f)
+        raise HTTPException(status_code=500, detail=str(e))
